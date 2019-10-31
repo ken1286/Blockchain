@@ -116,6 +116,14 @@ class Blockchain(object):
         # return True or False
         return guess_hash[:6] == "000000"
 
+    def new_transaction(self, sender, recipient, amount):
+        transaction = {'sender': sender,
+                       'recipient': recipient, 'amount': amount}
+
+        self.current_transactions.append(transaction)
+
+        return self.last_block['index'] + 1
+
 
 # Instantiate our Node
 app = Flask(__name__)
@@ -125,6 +133,21 @@ node_identifier = str(uuid4()).replace('-', '')
 
 # Instantiate the Blockchain
 blockchain = Blockchain()
+
+
+@app.route('/transactions/new', methods=['POST'])
+def new_transaction():
+    values = request.get_json()
+
+    if not all(k in values for k in required):
+        response = {'message': 'Missing Values'}
+        return jsonify(response), 400
+
+    index = blockchain.new_transaction(
+        values['sender'], values['recipient'], values['amount'])
+
+    response = {'message': 'Transaction successful'}
+    return jsonify(response), 200
 
 
 @app.route('/last_block', methods=['GET'])
@@ -158,6 +181,13 @@ def mine():
     # if blockchain.valid_proof(last_block_string, proof):
     if blockchain.valid_proof(last_block_string, proof):
         block = blockchain.new_block(proof, previous_hash)
+
+        blockchain.new_transaction(
+            sender="0",
+            recipient=data['id'],
+            amount=1
+        )
+
         response = {
             'message': "New Block Forged",
             'index': block['index'],
