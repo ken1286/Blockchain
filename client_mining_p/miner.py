@@ -1,6 +1,6 @@
 import hashlib
 import requests
-
+import time
 import sys
 import json
 
@@ -13,12 +13,17 @@ def proof_of_work(block):
     in an effort to find a number that is a valid proof
     :return: A valid proof for the provided block
     """
-    pass
+    # Proof is a SHA256 hash with 3 leading zeroes
+    block_string = json.dumps(block, sort_keys=True).encode()
+    proof = 0
+    while not valid_proof(block_string, proof):
+        proof += 1
+    return proof
 
 
 def valid_proof(block_string, proof):
     """
-    Validates the Proof:  Does hash(block_string, proof) contain 6
+    Validates the Proof:  Does hash(block_string, proof) contain 3
     leading zeroes?  Return true if the proof is valid
     :param block_string: <string> The stringified block to use to
     check in combination with `proof`
@@ -27,7 +32,10 @@ def valid_proof(block_string, proof):
     correct number of leading zeroes.
     :return: True if the resulting hash is a valid proof, False otherwise
     """
-    pass
+    guess = f'{block_string}{proof}'.encode()
+    guess_hash = hashlib.sha256(guess).hexdigest()
+    # return True or False
+    return guess_hash[:6] == "000000"
 
 
 if __name__ == '__main__':
@@ -39,11 +47,13 @@ if __name__ == '__main__':
 
     # Load ID
     f = open("my_id.txt", "r")
-    id = f.read()
+    id = f.readline()
     print("ID is", id)
     f.close()
 
     # Run forever until interrupted
+    coins_mined = 0
+    times = []
     while True:
         r = requests.get(url=node + "/last_block")
         # Handle non-json response
@@ -56,13 +66,34 @@ if __name__ == '__main__':
             break
 
         # TODO: Get the block from `data` and use it to look for a new proof
-        # new_proof = ???
-
+        last_block = data['last_block']
+        start_time = time.process_time()
+        new_proof = proof_of_work(last_block)
+        print(new_proof)
+        time_per_coin = time.process_time() - start_time
         # When found, POST it to the server {"proof": new_proof, "id": id}
         post_data = {"proof": new_proof, "id": id}
 
         r = requests.post(url=node + "/mine", json=post_data)
         data = r.json()
+
+        times.append(time_per_coin)
+        if data['message'] == 'New Block Forged':
+            coins_mined += 1
+            print('')
+            print(f'{coins_mined} coins mined this session')
+            print(f'{time_per_coin} seconds for current proof')
+            print(f'Average:', sum(times)/len(times), 'seconds per coin')
+            print(f'Total time mining:', sum(times), 'seconds')
+            f = open("my_id.txt", "r")
+            lines = f.readlines()
+            lines[1] = int(lines[1]) + 1
+            f.close()
+            with open('my_id.txt', 'w') as f:
+                for line in lines:
+                    f.write(str(line))
+        else:
+            print(data['message'])
 
         # TODO: If the server responds with a 'message' 'New Block Forged'
         # add 1 to the number of coins mined and print it.  Otherwise,
